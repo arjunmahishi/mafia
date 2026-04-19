@@ -12,7 +12,8 @@ func systemPrompt(player Player, identity AgentIdentity, g *Game) string {
 	b.WriteString("You are playing a game of Mafia. ")
 	b.WriteString(fmt.Sprintf("Your name is %s. ", identity.Name))
 	b.WriteString(fmt.Sprintf("Your personality: %s. ", identity.Trait))
-	b.WriteString("Stay in character at all times.\n\n")
+	b.WriteString("Stay in character at all times.\n")
+	b.WriteString("Do not include actions, gestures, or stage directions (e.g. text in asterisks like *looks around*). Only output spoken dialogue.\n\n")
 
 	b.WriteString("RULES SUMMARY:\n")
 	b.WriteString("- Players: villagers, 1 doctor, 1 detective, and mafia.\n")
@@ -131,7 +132,7 @@ func discussionPrompt(events []string) string {
 	b.WriteString("Share your thoughts, make accusations, defend yourself, or build alliances.\n\n")
 	b.WriteString("Game events so far:\n")
 	b.WriteString(eventHistory(events))
-	b.WriteString("\n\nRespond in character with 1-3 sentences. Do NOT use JSON. Speak naturally.")
+	b.WriteString("\n\nRespond in character with 1-3 sentences. Do NOT use JSON. Do not include gestures or actions in asterisks. Speak only in dialogue.")
 
 	return b.String()
 }

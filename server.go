@@ -481,6 +481,7 @@ type server struct {
 	botDelay      time.Duration // delay between bot actions for pacing
 	driving       bool          // true when driveGameAsync goroutine is active
 	newAgent      NewAgentFunc  // factory for creating bot agents
+	lastSpeechLen int           // word count of last bot speech (for TTS pacing)
 }
 
 type indexData struct {
@@ -957,25 +958,22 @@ func (s *server) broadcastThinking(name string) {
 // their seat, and triggers TTS on the client.
 func (s *server) broadcastBubble(playerID PlayerID, playerName, text string) {
 	ctx := context.Background()
-	payload := fmt.Sprintf("%d|%s|%s",
-		playerID,
-		template.HTMLEscapeString(playerName),
-		template.HTMLEscapeString(text),
-	)
+	// No HTML-escaping: the client sets these via textContent which is XSS-safe.
+	payload := fmt.Sprintf("%d|%s|%s", playerID, playerName, text)
 	s.hub.send(ctx, wsMessage{Target: "center-bubble", Action: "speak", HTML: payload})
 }
 
 // broadcastSpeakStart prepares the center bubble for streaming (shows speaker name, clears text).
 func (s *server) broadcastSpeakStart(playerID PlayerID, playerName string) {
 	ctx := context.Background()
-	payload := fmt.Sprintf("%d|%s", playerID, template.HTMLEscapeString(playerName))
+	payload := fmt.Sprintf("%d|%s", playerID, playerName)
 	s.hub.send(ctx, wsMessage{Target: "center-bubble", Action: "speak-start", HTML: payload})
 }
 
 // broadcastSpeakEnd signals that streaming is done and triggers TTS with the full message.
 func (s *server) broadcastSpeakEnd(playerID PlayerID, text string) {
 	ctx := context.Background()
-	payload := fmt.Sprintf("%d|%s", playerID, template.HTMLEscapeString(text))
+	payload := fmt.Sprintf("%d|%s", playerID, text)
 	s.hub.send(ctx, wsMessage{Target: "center-bubble", Action: "speak-end", HTML: payload})
 }
 
@@ -1101,11 +1099,21 @@ func (s *server) driveGameAsync() {
 				s.mu.Unlock()
 				return
 			}
+			// Compute pacing delay: use TTS estimate if a speech was broadcast,
+			// otherwise fall back to the default bot delay.
+			delay := s.botDelay
+			if s.lastSpeechLen > 0 && s.botDelay > 0 {
+				// ~150 wpm at rate 0.95 ≈ 400ms per word, plus a buffer.
+				ttsDelay := time.Duration(s.lastSpeechLen)*400*time.Millisecond + 500*time.Millisecond
+				if ttsDelay > delay {
+					delay = ttsDelay
+				}
+			}
+			s.lastSpeechLen = 0
 			s.mu.Unlock()
 
-			// Pace bot actions so events stream in visibly
-			if s.botDelay > 0 {
-				time.Sleep(s.botDelay)
+			if delay > 0 {
+				time.Sleep(delay)
 			}
 		}
 	}()
@@ -1323,7 +1331,12 @@ func (s *server) stepDayLocked() {
 		}
 		s.eventLog = append(s.eventLog, fmt.Sprintf("[%s] %s", speaker.Name, msg))
 		s.broadcastBubble(speaker.ID, speaker.Name, msg)
+		s.lastSpeechLen = len(strings.Fields(msg))
 		disc.Index++
+
+		// One speaker per step so driveGameAsync can pace for TTS.
+		s.finishDiscussionLocked()
+		return
 	}
 
 	s.finishDiscussionLocked()
@@ -1358,20 +1371,19 @@ func (s *server) stepDayStreamLocked(sa StreamingAgent, speaker *Player, disc *D
 
 	s.mu.Unlock()
 
-	// Stream tokens — onToken sends each chunk over WS (event log + center bubble)
+	// Stream tokens — onToken sends each chunk over WS (event log + center bubble).
+	// No HTML-escaping: both "stream" and "speak-stream" use textContent on the client.
 	textTarget := streamID + "-text"
 	msg, err := sa.DiscussStream(gameCopy, playerCopy, dayNumber, func(token string) {
-		escaped := template.HTMLEscapeString(token)
 		s.hub.send(ctx, wsMessage{
 			Target: textTarget,
 			Action: "stream",
-			HTML:   escaped,
+			HTML:   token,
 		})
-		// Also stream to the center bubble
 		s.hub.send(ctx, wsMessage{
 			Target: "center-text",
 			Action: "speak-stream",
-			HTML:   escaped,
+			HTML:   token,
 		})
 	})
 
@@ -1387,6 +1399,7 @@ func (s *server) stepDayStreamLocked(sa StreamingAgent, speaker *Player, disc *D
 	s.streamedUpTo = len(s.eventLog) // mark as already broadcast via streaming
 	// Send speak-end to trigger TTS with the full message
 	s.broadcastSpeakEnd(speaker.ID, msg)
+	s.lastSpeechLen = len(strings.Fields(msg))
 	disc.Index++
 
 	s.finishDiscussionLocked()
