@@ -678,11 +678,11 @@ func TestHandleIndexRendersWithPending(t *testing.T) {
 		t.Fatalf("status=%d, want 200", w.Code)
 	}
 	body := w.Body.String()
-	if !strings.Contains(body, "Your turn") {
-		t.Fatal("expected 'Your turn' in rendered HTML")
+	if !strings.Contains(body, "Your Turn") {
+		t.Fatal("expected 'Your Turn' in rendered HTML")
 	}
-	if !strings.Contains(body, "Your role:") {
-		t.Fatal("expected role display in rendered HTML")
+	if !strings.Contains(body, "role-badge") {
+		t.Fatal("expected role badge in rendered HTML")
 	}
 }
 

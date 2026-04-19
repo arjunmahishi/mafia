@@ -20,48 +20,52 @@ import (
 // WebSocket pushes, or composed together for the full page render.
 
 const tmplPhaseInfo = `{{define "phase-info"}}
-<strong>Phase:</strong> {{.Phase}} {{if gt .DayNumber 0}}(Day {{.DayNumber}}){{end}}
-{{if .HumanRole}}
-  <span class="role-badge role-{{.HumanRole}}">Your role: {{.HumanRole}}</span>
-{{end}}
+<div class="phase-bar">
+  <span class="phase-label">{{if eq (printf "%s" .Phase) "night"}}Night{{else if eq (printf "%s" .Phase) "day"}}Day{{else if eq (printf "%s" .Phase) "vote"}}Vote{{else}}{{.Phase}}{{end}}{{if gt .DayNumber 0}} {{.DayNumber}}{{end}}</span>
+  {{if .HumanRole}}
+    <span class="role-badge role-{{.HumanRole}}">{{.HumanRole}}</span>
+  {{end}}
+</div>
 {{end}}`
 
 const tmplActionPanel = `{{define "action-panel"}}
 {{if .Winner}}
-  <p><strong>Winner: {{.Winner}}</strong></p>
-  <form method="post" action="/start">
-    <input type="hidden" name="player_count" value="{{len .Players}}" />
-    <button type="submit">Play again</button>
-  </form>
+  <div class="game-over">
+    <p class="winner-text">{{if eq (printf "%s" .Winner) "mafia"}}The Mafia wins.{{else}}The Village wins.{{end}}</p>
+    <form method="post" action="/start">
+      <input type="hidden" name="player_count" value="{{len .Players}}" />
+      <button type="submit" class="btn btn-blood">Play Again</button>
+    </form>
+  </div>
 {{else if .Pending}}
   <div class="action-panel">
-    <h3>Your turn</h3>
-    <p>{{.Pending.Prompt}}</p>
+    <h3 class="action-title">Your Turn</h3>
+    <p class="action-prompt">{{.Pending.Prompt}}</p>
 
     {{if eq .Pending.Type "message"}}
       <form method="post" action="/action/message">
         <textarea name="message" placeholder="Type your message..." required></textarea>
-        <br/><button type="submit">Send message</button>
+        <button type="submit" class="btn btn-blood">Send</button>
       </form>
     {{else if eq .Pending.Type "vote"}}
       <form method="post" action="/action/vote">
         <select name="target" required>
-          <option value="">— Choose who to eliminate —</option>
+          <option value="">Choose who to eliminate</option>
           {{range .AllowedTargets}}
             <option value="{{.ID}}">{{.Name}}</option>
           {{end}}
         </select>
-        <button type="submit">Cast vote</button>
+        <button type="submit" class="btn btn-blood">Cast Vote</button>
       </form>
     {{else}}
       <form method="post" action="/action/night">
         <select name="target" required>
-          <option value="">— Choose target —</option>
+          <option value="">Choose target</option>
           {{range .AllowedTargets}}
             <option value="{{.ID}}">{{.Name}}</option>
           {{end}}
         </select>
-        <button type="submit">Confirm</button>
+        <button type="submit" class="btn btn-blood">Confirm</button>
       </form>
     {{end}}
   </div>
@@ -71,11 +75,12 @@ const tmplActionPanel = `{{define "action-panel"}}
 {{end}}`
 
 const tmplPlayerList = `{{define "player-list"}}
-<ul>
+<ul class="player-list">
   {{range .Players}}
-    <li class="{{if not .Alive}}dead{{end}} {{if .IsHuman}}you{{end}}">
-      {{.Name}} — {{if .Alive}}alive{{else}}dead{{end}}
-      {{if or .RoleRevealed $.RevealAllRoles}} ({{.Role}}){{end}}
+    <li class="player-entry{{if not .Alive}} dead{{end}}{{if .IsHuman}} you{{end}}">
+      <span class="player-name">{{if .IsHuman}}You{{else}}{{.Name}}{{end}}</span>
+      <span class="player-status">{{if .Alive}}alive{{else}}dead{{end}}</span>
+      {{if or .RoleRevealed $.RevealAllRoles}}<span class="role-badge role-{{.Role}}">{{.Role}}</span>{{end}}
     </li>
   {{end}}
 </ul>
@@ -84,11 +89,15 @@ const tmplPlayerList = `{{define "player-list"}}
 const tmplEventItem = `{{define "event-item"}}<li>{{.}}</li>{{end}}`
 
 const tmplLobby = `{{define "lobby"}}
-<form method="post" action="/start">
-  <label for="player_count">Players:</label>
-  <input id="player_count" name="player_count" type="number" min="5" max="10" value="8" />
-  <button type="submit">Start game</button>
-</form>
+<div class="lobby-inner">
+  <h1 class="lobby-title"><span class="text-blood">Mafia</span></h1>
+  <p class="lobby-subtitle">Social deception with AI agents</p>
+  <form method="post" action="/start" class="lobby-form">
+    <label for="player_count">Players</label>
+    <input id="player_count" name="player_count" type="number" min="5" max="10" value="8" />
+    <button type="submit" class="btn btn-blood">Start Game</button>
+  </form>
+</div>
 {{end}}`
 
 const indexTemplate = `<!doctype html>
@@ -96,31 +105,315 @@ const indexTemplate = `<!doctype html>
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>AI Mafia</title>
+  <title>Mafia — Social Deception with AI</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Special+Elite&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
   <style>
-    body { font-family: sans-serif; margin: 2rem; background: #fafafa; }
-    h1 { margin-bottom: 0.5rem; }
-    .row { display: flex; gap: 2rem; align-items: flex-start; flex-wrap: wrap; }
-    .panel { border: 1px solid #ddd; border-radius: 8px; padding: 1rem; min-width: 280px; background: #fff; }
-    .dead { color: #999; text-decoration: line-through; }
-    .you { font-weight: bold; }
-    ul { padding-left: 1.2rem; }
-    .action-panel { border: 2px solid #4a90d9; border-radius: 8px; padding: 1rem; margin: 1rem 0; background: #f0f7ff; }
-    .action-panel h3 { margin-top: 0; color: #4a90d9; }
-    .waiting { color: #888; font-style: italic; padding: 1rem; }
-    button[type=submit] { padding: 0.4rem 1rem; cursor: pointer; }
-    select { padding: 0.3rem; min-width: 150px; }
-    textarea { width: 100%; min-height: 60px; }
-    .role-badge { display: inline-block; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.85em; margin-left: 0.5rem; }
-    .role-mafia { background: #f8d7da; color: #721c24; }
-    .role-doctor { background: #d4edda; color: #155724; }
-    .role-detective { background: #cce5ff; color: #004085; }
-    .role-villager { background: #e2e3e5; color: #383d41; }
-    #event-log { max-height: 400px; overflow-y: auto; }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --blood: #dc2626;
+      --blood-dim: #b91c1c;
+      --bg: #0a0a0a;
+      --card: #111111;
+      --border: #1e1e1e;
+      --text: #a3a3a3;
+      --text-bright: #e5e5e5;
+      --text-dim: #525252;
+      --font-display: 'Special Elite', cursive;
+      --font-body: 'Inter', sans-serif;
+    }
+
+    body {
+      font-family: var(--font-body);
+      font-weight: 300;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background: radial-gradient(ellipse at 50% 0%, rgba(220,38,38,0.04) 0%, transparent 60%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* -- Lobby -- */
+    #lobby {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+    }
+    .lobby-inner { text-align: center; }
+    .lobby-title {
+      font-family: var(--font-display);
+      font-size: 4rem;
+      color: white;
+      letter-spacing: 0.05em;
+      margin-bottom: 0.25rem;
+    }
+    .text-blood { color: var(--blood); }
+    .lobby-subtitle {
+      color: var(--text-dim);
+      font-size: 1.1rem;
+      margin-bottom: 2.5rem;
+    }
+    .lobby-form {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 1rem;
+    }
+    .lobby-form label {
+      color: var(--text);
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+    }
+    .lobby-form input[type=number] {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text-bright);
+      font-size: 1.25rem;
+      text-align: center;
+      padding: 0.6rem 1rem;
+      width: 80px;
+      outline: none;
+    }
+    .lobby-form input[type=number]:focus {
+      border-color: var(--blood);
+    }
+
+    /* -- Buttons -- */
+    .btn {
+      display: inline-block;
+      padding: 0.65rem 1.6rem;
+      font-family: var(--font-display);
+      font-size: 1rem;
+      letter-spacing: 0.08em;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      transition: background 0.15s, box-shadow 0.15s;
+      min-height: 44px;
+    }
+    .btn-blood {
+      background: var(--blood);
+      color: white;
+    }
+    .btn-blood:hover {
+      background: var(--blood-dim);
+      box-shadow: 0 0 24px rgba(220,38,38,0.3);
+    }
+
+    /* -- Game Area -- */
+    #game-area {
+      position: relative;
+      z-index: 1;
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 1.5rem 1rem 3rem;
+    }
+
+    /* -- Phase Bar -- */
+    .phase-bar {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.75rem 1rem;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      margin-bottom: 1rem;
+    }
+    .phase-label {
+      font-family: var(--font-display);
+      font-size: 1.4rem;
+      color: var(--text-bright);
+      letter-spacing: 0.05em;
+    }
+
+    /* -- Role Badges -- */
+    .role-badge {
+      display: inline-block;
+      padding: 0.15rem 0.55rem;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 500;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .role-mafia { background: rgba(220,38,38,0.15); color: #fca5a5; border: 1px solid rgba(220,38,38,0.3); }
+    .role-doctor { background: rgba(34,197,94,0.12); color: #86efac; border: 1px solid rgba(34,197,94,0.25); }
+    .role-detective { background: rgba(59,130,246,0.12); color: #93c5fd; border: 1px solid rgba(59,130,246,0.25); }
+    .role-villager { background: rgba(163,163,163,0.1); color: #a3a3a3; border: 1px solid rgba(163,163,163,0.2); }
+
+    /* -- Action Panel -- */
+    #action-panel { margin-bottom: 1rem; }
+    .action-panel {
+      border: 1px solid var(--blood);
+      border-radius: 8px;
+      padding: 1.25rem;
+      background: rgba(220,38,38,0.04);
+    }
+    .action-title {
+      font-family: var(--font-display);
+      font-size: 1.1rem;
+      color: var(--blood);
+      margin-bottom: 0.4rem;
+    }
+    .action-prompt {
+      color: var(--text);
+      font-size: 0.9rem;
+      margin-bottom: 1rem;
+    }
+    .action-panel textarea {
+      width: 100%;
+      min-height: 60px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text-bright);
+      font-family: var(--font-body);
+      font-size: 0.9rem;
+      padding: 0.6rem 0.75rem;
+      resize: vertical;
+      outline: none;
+      margin-bottom: 0.75rem;
+    }
+    .action-panel textarea:focus { border-color: var(--blood); }
+    .action-panel select {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text-bright);
+      font-size: 0.9rem;
+      padding: 0.5rem 0.75rem;
+      min-width: 180px;
+      outline: none;
+      margin-right: 0.5rem;
+      min-height: 44px;
+    }
+    .action-panel select:focus { border-color: var(--blood); }
+
+    /* -- Waiting / Thinking -- */
+    .waiting {
+      color: var(--text-dim);
+      font-style: italic;
+      padding: 1rem;
+      font-size: 0.9rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .thinking-dot {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--blood);
+      animation: pulse-dot 1.2s ease-in-out infinite;
+    }
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 0.3; transform: scale(0.8); }
+      50% { opacity: 1; transform: scale(1.2); }
+    }
+
+    /* -- Game Over -- */
+    .game-over {
+      text-align: center;
+      padding: 2rem 1rem;
+    }
+    .winner-text {
+      font-family: var(--font-display);
+      font-size: 1.8rem;
+      color: var(--text-bright);
+      margin-bottom: 1.5rem;
+    }
+
+    /* -- Layout: Players + Event Log -- */
+    .game-row {
+      display: flex;
+      gap: 1rem;
+      align-items: flex-start;
+    }
+    .game-panel {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem;
+    }
+    .game-panel h2 {
+      font-family: var(--font-display);
+      font-size: 1rem;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      margin-bottom: 0.75rem;
+    }
+    .panel-players { flex: 0 0 220px; }
+    .panel-events { flex: 1; min-width: 0; }
+
+    /* -- Player List -- */
+    .player-list { list-style: none; }
+    .player-entry {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.4rem 0;
+      font-size: 0.9rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .player-entry:last-child { border-bottom: none; }
+    .player-name { color: var(--text-bright); }
+    .player-status { color: var(--text-dim); font-size: 0.75rem; }
+    .player-entry.dead .player-name { color: var(--text-dim); text-decoration: line-through; }
+    .player-entry.dead .player-status { color: var(--text-dim); }
+    .player-entry.you .player-name { color: white; font-weight: 500; }
+
+    /* -- Event Log -- */
+    #event-log {
+      list-style: none;
+      max-height: 450px;
+      overflow-y: auto;
+      scroll-behavior: smooth;
+    }
+    #event-log li {
+      padding: 0.4rem 0;
+      font-size: 0.88rem;
+      line-height: 1.45;
+      border-bottom: 1px solid rgba(30,30,30,0.5);
+      color: var(--text);
+    }
+    #event-log li:last-child { border-bottom: none; }
+
+    /* Scrollbar styling */
+    #event-log::-webkit-scrollbar { width: 4px; }
+    #event-log::-webkit-scrollbar-track { background: transparent; }
+    #event-log::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+    /* -- Responsive -- */
+    @media (max-width: 640px) {
+      #game-area { padding: 1rem 0.75rem 2rem; }
+      .game-row { flex-direction: column; }
+      .panel-players { flex: none; width: 100%; }
+      .panel-events { flex: none; width: 100%; }
+      .lobby-title { font-size: 3rem; }
+      .phase-label { font-size: 1.1rem; }
+      #event-log { max-height: 350px; }
+    }
   </style>
 </head>
 <body>
-  <h1>AI Mafia</h1>
 
   <div id="lobby">
   {{if not .HasGame}}
@@ -129,22 +422,22 @@ const indexTemplate = `<!doctype html>
   </div>
 
   <div id="game-area" {{if not .HasGame}}style="display:none"{{end}}>
-    <p id="phase-info">{{if .HasGame}}{{template "phase-info" .}}{{end}}</p>
+    <div id="phase-info">{{if .HasGame}}{{template "phase-info" .}}{{end}}</div>
 
     <div id="action-panel">
       {{if .HasGame}}{{template "action-panel" .}}{{end}}
     </div>
 
-    <div class="row">
-      <div class="panel">
+    <div class="game-row">
+      <div class="game-panel panel-players">
         <h2>Players</h2>
         <div id="player-list">
           {{if .HasGame}}{{template "player-list" .}}{{end}}
         </div>
       </div>
 
-      <div class="panel">
-        <h2>Event log</h2>
+      <div class="game-panel panel-events">
+        <h2>Event Log</h2>
         <ul id="event-log">
           {{range .EventLog}}
             <li>{{.}}</li>
@@ -171,6 +464,10 @@ const indexTemplate = `<!doctype html>
         if (msg.action === "append") {
           el.insertAdjacentHTML("beforeend", msg.html);
           el.scrollTop = el.scrollHeight;
+        } else if (msg.action === "stream") {
+          el.textContent += msg.html;
+          var log = document.getElementById("event-log");
+          if (log) log.scrollTop = log.scrollHeight;
         } else if (msg.action === "replace") {
           el.innerHTML = msg.html;
         } else if (msg.action === "show") {
@@ -220,14 +517,15 @@ const indexTemplate = `<!doctype html>
 `
 
 type server struct {
-	mu       sync.Mutex
-	game     *Game
-	eventLog []string
-	tmpl     *template.Template
-	hub      hub
-	botDelay time.Duration // delay between bot actions for pacing
-	driving  bool          // true when driveGameAsync goroutine is active
-	newAgent NewAgentFunc  // factory for creating bot agents
+	mu            sync.Mutex
+	game          *Game
+	eventLog      []string
+	streamedUpTo  int           // eventLog entries up to this index were already sent via streaming
+	tmpl          *template.Template
+	hub           hub
+	botDelay      time.Duration // delay between bot actions for pacing
+	driving       bool          // true when driveGameAsync goroutine is active
+	newAgent      NewAgentFunc  // factory for creating bot agents
 }
 
 type indexData struct {
@@ -347,9 +645,15 @@ func (s *server) handleStart(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.mu.Lock()
+	if s.driving {
+		s.mu.Unlock()
+		http.Error(w, "game in progress", http.StatusConflict)
+		return
+	}
 	s.game = g
 	s.eventLog = []string{"Game started!"}
 	s.eventLog = append(s.eventLog, fmt.Sprintf("You are the %s.", g.HumanPlayer().Role))
+	s.streamedUpTo = 0
 	s.game.EventLog = &s.eventLog
 
 	if s.hub.connected() {
@@ -678,6 +982,17 @@ func (s *server) broadcastPhaseLocked(ctx context.Context) {
 	}
 }
 
+// broadcastThinking sends a "{name} is thinking..." indicator to the action panel.
+// Can be called with s.mu held (hub has its own lock).
+func (s *server) broadcastThinking(name string) {
+	ctx := context.Background()
+	html := fmt.Sprintf(
+		`<p class="waiting"><span class="thinking-dot"></span>%s is thinking...</p>`,
+		template.HTMLEscapeString(name),
+	)
+	s.hub.send(ctx, wsMessage{Target: "action-panel", Action: "replace", HTML: html})
+}
+
 // --- Game driver ---
 
 // abortGameLocked terminates the game due to an unrecoverable error (e.g. AI
@@ -773,10 +1088,15 @@ func (s *server) driveGameAsync() {
 				return
 			}
 
-			// Broadcast any new event log entries
-			for i := prevLogLen; i < len(s.eventLog); i++ {
+			// Broadcast any new event log entries (skip those already sent via streaming)
+			broadcastFrom := prevLogLen
+			if s.streamedUpTo > broadcastFrom {
+				broadcastFrom = s.streamedUpTo
+			}
+			for i := broadcastFrom; i < len(s.eventLog); i++ {
 				s.broadcastEvent(ctx, s.eventLog[i])
 			}
+			s.streamedUpTo = 0 // reset so it doesn't affect future iterations
 
 			// Broadcast phase change if it occurred
 			phaseChanged := g.Phase != prevPhase
@@ -1000,7 +1320,16 @@ func (s *server) stepDayLocked() {
 			return
 		}
 
-		// Bot speaks
+		// Check if agent supports streaming
+		if sa, ok := speaker.Agent.(StreamingAgent); ok {
+			s.stepDayStreamLocked(sa, speaker, disc)
+			return // one streaming speaker per step; let driveGameAsync loop back
+		}
+
+		// Broadcast "thinking" indicator
+		s.broadcastThinking(speaker.Name)
+
+		// Bot speaks (non-streaming)
 		msg, err := speaker.Agent.Discuss(g, *speaker, g.DayNumber)
 		if err != nil {
 			s.abortGameLocked(err)
@@ -1009,6 +1338,65 @@ func (s *server) stepDayLocked() {
 		s.eventLog = append(s.eventLog, fmt.Sprintf("[%s] %s", speaker.Name, msg))
 		disc.Index++
 	}
+
+	s.finishDiscussionLocked()
+}
+
+// stepDayStreamLocked handles a single streaming agent's discussion turn.
+// It sends a placeholder over WS, releases the lock during the streaming LLM
+// call, then re-acquires the lock to update state.
+func (s *server) stepDayStreamLocked(sa StreamingAgent, speaker *Player, disc *DiscussionState) {
+	ctx := context.Background()
+
+	// Send placeholder for streaming message
+	streamID := fmt.Sprintf("stream-%d-%d", speaker.ID, s.game.DayNumber)
+	placeholder := fmt.Sprintf(
+		`<li id="%s"><strong>[%s]</strong> <span id="%s-text"></span></li>`,
+		streamID, template.HTMLEscapeString(speaker.Name), streamID,
+	)
+	s.hub.send(ctx, wsMessage{Target: "event-log", Action: "append", HTML: placeholder})
+
+	// Broadcast "thinking" indicator
+	s.broadcastThinking(speaker.Name)
+
+	// Snapshot what we need, then release the lock for the LLM call.
+	// Safe: s.driving is true (preventing re-entry) and handleStart rejects
+	// new games while driving. The Game pointer is stable during our turn.
+	gameCopy := s.game
+	playerCopy := *speaker
+	dayNumber := s.game.DayNumber
+
+	s.mu.Unlock()
+
+	// Stream tokens — onToken sends each chunk over WS
+	textTarget := streamID + "-text"
+	msg, err := sa.DiscussStream(gameCopy, playerCopy, dayNumber, func(token string) {
+		s.hub.send(ctx, wsMessage{
+			Target: textTarget,
+			Action: "stream",
+			HTML:   template.HTMLEscapeString(token),
+		})
+	})
+
+	// Re-acquire lock and update state
+	s.mu.Lock()
+
+	if err != nil {
+		s.abortGameLocked(err)
+		return
+	}
+
+	s.eventLog = append(s.eventLog, fmt.Sprintf("[%s] %s", speaker.Name, msg))
+	s.streamedUpTo = len(s.eventLog) // mark as already broadcast via streaming
+	disc.Index++
+
+	s.finishDiscussionLocked()
+}
+
+// finishDiscussionLocked checks if discussion is done and advances to vote phase.
+func (s *server) finishDiscussionLocked() {
+	g := s.game
+	disc := &g.Discussion
 
 	if disc.Index >= len(disc.Order) {
 		// Discussion done, advance to vote
@@ -1049,6 +1437,9 @@ func (s *server) stepVoteLocked() {
 			}
 			return
 		}
+
+		// Broadcast "thinking" indicator
+		s.broadcastThinking(voter.Name)
 
 		// Bot votes
 		target, ok, err := voter.Agent.Vote(g, *voter)

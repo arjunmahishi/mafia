@@ -53,14 +53,14 @@
 - [x] Enforce structured output (JSON Schema) for night action and vote decisions
 - [x] Ship criteria: full game playable via `go run .` with AI-driven agents
 
-## M6: Vertical slice #5 - streaming AI + UX polish
+## M6: Vertical slice #5 - streaming AI + UX polish (completed)
 
-- [ ] Stream AI token output over WebSocket into the existing UI
-- [ ] Add placeholder + incremental updates for in-progress agent responses
-- [ ] Improve game screen clarity: current turn, required action, disabled
+- [x] Stream AI token output over WebSocket into the existing UI
+- [x] Add placeholder + incremental updates for in-progress agent responses
+- [x] Improve game screen clarity: current turn, required action, disabled
       controls when waiting
-- [ ] Ensure mobile and desktop usability for full game flow
-- [ ] Ship criteria: smooth full game demo with streaming AI responses
+- [x] Ensure mobile and desktop usability for full game flow
+- [x] Ship criteria: smooth full game demo with streaming AI responses
 
 ## M7: Stabilization + demo readiness
 
