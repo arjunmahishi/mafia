@@ -83,11 +83,7 @@ func gameContext(g *Game) string {
 		if !p.Alive {
 			status = fmt.Sprintf("dead (was %s)", p.Role)
 		}
-		marker := ""
-		if p.IsHuman {
-			marker = " [human]"
-		}
-		b.WriteString(fmt.Sprintf("  - %s: %s%s\n", p.Name, status, marker))
+		b.WriteString(fmt.Sprintf("  - %s: %s\n", p.Name, status))
 	}
 
 	return b.String()
@@ -129,7 +125,8 @@ func discussionPrompt(events []string) string {
 	var b strings.Builder
 
 	b.WriteString("It's your turn to speak during the day discussion.\n")
-	b.WriteString("Share your thoughts, make accusations, defend yourself, or build alliances.\n\n")
+	b.WriteString("Share your thoughts, defend yourself, or build alliances.\n")
+	b.WriteString("Don't accuse someone just for the sake of creating drama. Base your suspicions on actual observations — who's been quiet, who deflected, whose behavior changed after a kill. It's okay to share thoughts without pointing fingers.\n\n")
 	b.WriteString("Game events so far:\n")
 	b.WriteString(eventHistory(events))
 	b.WriteString("\n\nRespond in character with 1-3 sentences. Do NOT use JSON. Do not include gestures or actions in asterisks. Speak only in dialogue.")

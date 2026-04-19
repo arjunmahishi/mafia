@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"html/template"
 	"log"
@@ -349,17 +350,27 @@ const indexTemplate = `<!doctype html>
       speechSynthesis.onvoiceschanged = loadVoices;
     }
 
+    function signalTTSDone() {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({type: "tts-done"}));
+      }
+    }
+
     function speakMessage(playerID, text) {
-      if (!ttsEnabled || typeof speechSynthesis === 'undefined' || !text) return;
+      if (!ttsEnabled || typeof speechSynthesis === 'undefined' || !text) {
+        signalTTSDone();
+        return;
+      }
       speechSynthesis.cancel(); // stop any current speech
 
       var utterance = new SpeechSynthesisUtterance(text);
       utterance.rate = 0.95;
+      utterance.onend = signalTTSDone;
+      utterance.onerror = signalTTSDone;
 
       // Pick a consistent voice per player
       if (availableVoices.length > 0) {
         if (!voiceMap[playerID]) {
-          // Hash player ID to pick a voice index
           var idx = (playerID * 7) % availableVoices.length;
           voiceMap[playerID] = availableVoices[idx];
         }
@@ -482,6 +493,7 @@ type server struct {
 	driving       bool          // true when driveGameAsync goroutine is active
 	newAgent      NewAgentFunc  // factory for creating bot agents
 	lastSpeechLen int           // word count of last bot speech (for TTS pacing)
+	ttsDone       chan struct{} // signaled by client when TTS playback finishes
 }
 
 type indexData struct {
@@ -505,6 +517,7 @@ func newServer() *server {
 	return &server{
 		tmpl:     tmpl,
 		botDelay: 500 * time.Millisecond,
+		ttsDone:  make(chan struct{}, 1),
 	}
 }
 
@@ -849,11 +862,20 @@ func (s *server) handleWS(w http.ResponseWriter, r *http.Request) {
 	s.sendFullStateLocked(r.Context())
 	s.mu.Unlock()
 
-	// Read loop — we don't expect inbound messages, but must read to detect close.
+	// Read loop — listen for client signals (e.g. TTS done) and detect close.
 	for {
-		_, _, err := c.Read(r.Context())
+		_, data, err := c.Read(r.Context())
 		if err != nil {
 			break
+		}
+		var sig struct {
+			Type string `json:"type"`
+		}
+		if json.Unmarshal(data, &sig) == nil && sig.Type == "tts-done" {
+			select {
+			case s.ttsDone <- struct{}{}:
+			default:
+			}
 		}
 	}
 	s.hub.clearConn(c)
@@ -1099,21 +1121,20 @@ func (s *server) driveGameAsync() {
 				s.mu.Unlock()
 				return
 			}
-			// Compute pacing delay: use TTS estimate if a speech was broadcast,
-			// otherwise fall back to the default bot delay.
-			delay := s.botDelay
-			if s.lastSpeechLen > 0 && s.botDelay > 0 {
-				// ~150 wpm at rate 0.95 ≈ 400ms per word, plus a buffer.
-				ttsDelay := time.Duration(s.lastSpeechLen)*400*time.Millisecond + 500*time.Millisecond
-				if ttsDelay > delay {
-					delay = ttsDelay
-				}
-			}
+			// Wait for TTS playback if a speech was broadcast, otherwise use default delay.
+			speechPending := s.lastSpeechLen > 0 && s.botDelay > 0
 			s.lastSpeechLen = 0
 			s.mu.Unlock()
 
-			if delay > 0 {
-				time.Sleep(delay)
+			if speechPending {
+				// Drain any stale signal, then wait for client TTS-done callback.
+				select {
+				case <-s.ttsDone:
+				default:
+				}
+				<-s.ttsDone
+			} else if s.botDelay > 0 {
+				time.Sleep(s.botDelay)
 			}
 		}
 	}()
@@ -1287,8 +1308,11 @@ func (s *server) resolveNightLocked() {
 		return
 	}
 
-	// Initialize discussion state
+	// Initialize discussion state with randomized speaking order
 	alive := g.AlivePlayerIDs()
+	rand.Shuffle(len(alive), func(i, j int) {
+		alive[i], alive[j] = alive[j], alive[i]
+	})
 	g.Discussion = DiscussionState{Order: alive, Index: 0}
 	s.eventLog = append(s.eventLog, fmt.Sprintf("--- Day %d Discussion ---", g.DayNumber))
 }
