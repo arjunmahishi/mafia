@@ -80,10 +80,10 @@ const tmplActionPanel = `{{define "action-panel"}}
 
 const tmplPlayerList = `{{define "player-list"}}
 {{range $i, $p := .Players}}
-  <div class="seat absolute flex flex-col items-center" data-seat="{{$i}}" data-total="{{len $.Players}}" data-human="{{$p.IsHuman}}">
-    <div class="flex flex-col items-center gap-1">
+  <div class="seat absolute flex flex-col items-center" data-seat="{{$i}}" data-player="{{$p.ID}}" data-total="{{len $.Players}}" data-human="{{$p.IsHuman}}">
+    <div class="seat-icon flex flex-col items-center gap-1">
       {{if $p.IsHuman}}
-      <div class="w-12 h-12 rounded-full flex items-center justify-center border-2 {{if not $p.Alive}}opacity-30 border-neutral-700{{else}}border-white bg-white/5{{end}}">
+      <div class="avatar w-12 h-12 rounded-full flex items-center justify-center border-2 transition-all duration-300 {{if not $p.Alive}}opacity-30 border-neutral-700{{else}}border-white bg-white/5{{end}}">
         <svg viewBox="0 0 48 48" class="w-8 h-8">
           <circle cx="24" cy="12" r="6" fill="none" stroke="white" stroke-width="2"/>
           <line x1="24" y1="18" x2="24" y2="34" stroke="white" stroke-width="2" stroke-linecap="round"/>
@@ -93,7 +93,7 @@ const tmplPlayerList = `{{define "player-list"}}
         </svg>
       </div>
       {{else}}
-      <div class="w-12 h-12 rounded-lg flex items-center justify-center border-2 {{if not $p.Alive}}opacity-30 border-neutral-700{{else}}border-neutral-500 bg-neutral-800/50{{end}}">
+      <div class="avatar w-12 h-12 rounded-lg flex items-center justify-center border-2 transition-all duration-300 {{if not $p.Alive}}opacity-30 border-neutral-700{{else}}border-neutral-500 bg-neutral-800/50{{end}}">
         <svg viewBox="0 0 56 56" class="w-8 h-8 text-neutral-400">
           <line x1="20" y1="0" x2="14" y2="-10" stroke="currentColor" stroke-width="2" stroke-linecap="round" transform="translate(0,14)"/>
           <line x1="36" y1="0" x2="42" y2="-10" stroke="currentColor" stroke-width="2" stroke-linecap="round" transform="translate(0,14)"/>
@@ -107,10 +107,6 @@ const tmplPlayerList = `{{define "player-list"}}
       <span class="text-xs font-medium max-w-[80px] truncate text-center {{if not $p.Alive}}line-through text-neutral-600{{else if $p.IsHuman}}text-white{{else}}text-neutral-300{{end}}">{{$p.Name}}</span>
       {{if not $p.Alive}}<span class="text-[10px] text-neutral-600">dead</span>{{end}}
       {{if or $p.RoleRevealed $.RevealAllRoles}}<span class="role-badge role-{{$p.Role}}">{{$p.Role}}</span>{{end}}
-    </div>
-    <div id="bubble-{{$p.ID}}" class="speech-bubble hidden mt-2 max-w-[160px] text-xs text-neutral-300 bg-neutral-800/90 border border-neutral-700 rounded-lg px-3 py-2 text-center relative">
-      <div class="absolute -top-1.5 left-1/2 -translate-x-1/2 w-3 h-3 bg-neutral-800/90 border-l border-t border-neutral-700 rotate-45"></div>
-      <span class="bubble-text relative z-10"></span>
     </div>
   </div>
 {{end}}
@@ -189,16 +185,15 @@ const indexTemplate = `<!doctype html>
     .role-detective { background: rgba(59,130,246,0.12); color: #93c5fd; border: 1px solid rgba(59,130,246,0.25); }
     .role-villager { background: rgba(163,163,163,0.1); color: #a3a3a3; border: 1px solid rgba(163,163,163,0.2); }
 
-    /* Speech bubble transition */
-    .speech-bubble {
-      transition: opacity 0.3s ease, transform 0.3s ease;
-      opacity: 0;
-      transform: translateY(-4px);
+    /* Speaking highlight on seat avatar */
+    .seat.speaking .avatar {
+      border-color: #dc2626 !important;
+      box-shadow: 0 0 16px rgba(220,38,38,0.5), 0 0 32px rgba(220,38,38,0.2);
     }
-    .speech-bubble.visible {
-      display: block !important;
-      opacity: 1;
-      transform: translateY(0);
+
+    /* Center bubble fade-in */
+    #center-bubble {
+      transition: opacity 0.3s ease;
     }
 
     /* Thinking dot animation */
@@ -236,12 +231,30 @@ const indexTemplate = `<!doctype html>
   </div>
 
   <div id="game-area" class="relative z-10 max-w-4xl mx-auto px-4 py-6 {{if not .HasGame}}hidden{{end}}">
-    <div id="phase-info">{{if .HasGame}}{{template "phase-info" .}}{{end}}</div>
+    <div class="flex items-center gap-2">
+      <div id="phase-info" class="flex-1">{{if .HasGame}}{{template "phase-info" .}}{{end}}</div>
+      <button id="tts-toggle" onclick="toggleTTS()" title="Toggle voice" class="w-10 h-10 flex items-center justify-center rounded-lg bg-neutral-900 border border-neutral-800 text-neutral-400 hover:text-white hover:border-neutral-600 transition-colors cursor-pointer">
+        <svg id="tts-icon-on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-5 h-5">
+          <path d="M11 5L6 9H2v6h4l5 4V5z" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M19.07 4.93a10 10 0 010 14.14M15.54 8.46a5 5 0 010 7.07" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <svg id="tts-icon-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-5 h-5 hidden">
+          <path d="M11 5L6 9H2v6h4l5 4V5z" stroke-linecap="round" stroke-linejoin="round"/>
+          <line x1="23" y1="9" x2="17" y2="15" stroke-linecap="round" stroke-linejoin="round"/>
+          <line x1="17" y1="9" x2="23" y2="15" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+    </div>
 
     <!-- Round table -->
     <div id="round-table" class="relative w-full mx-auto my-6" style="aspect-ratio: 1 / 1; max-width: 600px;">
       <!-- Oval table surface -->
       <div class="table-surface absolute rounded-full" style="top: 15%; left: 15%; width: 70%; height: 70%;"></div>
+      <!-- Centered speech area (inside the table) -->
+      <div id="center-bubble" class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10 max-w-[280px] w-full text-center hidden">
+        <span id="center-speaker" class="text-xs font-display text-red-400 uppercase tracking-wider"></span>
+        <p id="center-text" class="text-sm text-neutral-300 mt-1 leading-relaxed break-words"></p>
+      </div>
       <!-- Player seats positioned around the circle -->
       <div id="player-list">
         {{if .HasGame}}{{template "player-list" .}}{{end}}
@@ -263,22 +276,28 @@ const indexTemplate = `<!doctype html>
   </div>
 
   <script>
+  // TTS toggle — global so onclick can call it
+  var ttsEnabled = true;
+  function toggleTTS() {
+    ttsEnabled = !ttsEnabled;
+    document.getElementById('tts-icon-on').classList.toggle('hidden', !ttsEnabled);
+    document.getElementById('tts-icon-off').classList.toggle('hidden', ttsEnabled);
+    if (!ttsEnabled) speechSynthesis.cancel();
+  }
+
   (function() {
     var ws;
     var reconnectTimer;
 
-    // Position seats around an ellipse. Human (data-human=true) always at bottom.
+    // --- Seat layout ---
+    // Position seats around an ellipse. Human (index 0) always at bottom.
     function layoutSeats() {
       var seats = document.querySelectorAll('.seat');
       if (!seats.length) return;
       var total = seats.length;
-      // Human is always index 0, placed at bottom (angle = PI/2 from positive-x = bottom of circle).
-      // Other players fill the remaining positions going clockwise from bottom-right.
       seats.forEach(function(seat, i) {
-        // Angle: start from bottom (PI/2), go clockwise (subtract because CSS y-axis is inverted).
-        // Distribute evenly around the full circle.
         var angle = (Math.PI / 2) + (2 * Math.PI * i / total);
-        var radiusX = 46; // % of container
+        var radiusX = 46;
         var radiusY = 46;
         var cx = 50 + radiusX * Math.cos(angle);
         var cy = 50 + radiusY * Math.sin(angle);
@@ -288,14 +307,71 @@ const indexTemplate = `<!doctype html>
       });
     }
 
-    // Hide all speech bubbles
-    function clearBubbles() {
-      document.querySelectorAll('.speech-bubble').forEach(function(b) {
-        b.classList.remove('visible');
-        b.classList.add('hidden');
+    // --- Speaker highlight ---
+    function highlightSpeaker(playerID) {
+      document.querySelectorAll('.seat').forEach(function(s) {
+        s.classList.remove('speaking');
       });
+      if (playerID) {
+        var seat = document.querySelector('.seat[data-player="' + playerID + '"]');
+        if (seat) seat.classList.add('speaking');
+      }
     }
 
+    // --- Center bubble ---
+    function showCenterBubble(speakerName, text) {
+      var bubble = document.getElementById('center-bubble');
+      var speaker = document.getElementById('center-speaker');
+      var textEl = document.getElementById('center-text');
+      if (!bubble) return;
+      speaker.textContent = speakerName;
+      textEl.textContent = text;
+      bubble.classList.remove('hidden');
+    }
+
+    function hideCenterBubble() {
+      var bubble = document.getElementById('center-bubble');
+      if (bubble) bubble.classList.add('hidden');
+    }
+
+    // --- Text-to-Speech ---
+    // Assign a slightly different voice/pitch per player for variety.
+    var voiceMap = {};
+    var availableVoices = [];
+
+    function loadVoices() {
+      availableVoices = speechSynthesis.getVoices().filter(function(v) {
+        return v.lang.startsWith('en');
+      });
+    }
+    if (typeof speechSynthesis !== 'undefined') {
+      loadVoices();
+      speechSynthesis.onvoiceschanged = loadVoices;
+    }
+
+    function speakMessage(playerID, text) {
+      if (!ttsEnabled || typeof speechSynthesis === 'undefined' || !text) return;
+      speechSynthesis.cancel(); // stop any current speech
+
+      var utterance = new SpeechSynthesisUtterance(text);
+      utterance.rate = 0.95;
+
+      // Pick a consistent voice per player
+      if (availableVoices.length > 0) {
+        if (!voiceMap[playerID]) {
+          // Hash player ID to pick a voice index
+          var idx = (playerID * 7) % availableVoices.length;
+          voiceMap[playerID] = availableVoices[idx];
+        }
+        utterance.voice = voiceMap[playerID];
+      }
+
+      // Vary pitch slightly per player (0.8 - 1.2 range)
+      utterance.pitch = 0.8 + ((playerID * 3) % 5) * 0.1;
+      speechSynthesis.speak(utterance);
+    }
+
+    // --- WebSocket ---
     function connect() {
       var proto = location.protocol === "https:" ? "wss:" : "ws:";
       ws = new WebSocket(proto + "//" + location.host + "/ws");
@@ -314,27 +390,42 @@ const indexTemplate = `<!doctype html>
           if (log) log.scrollTop = log.scrollHeight;
         } else if (msg.action === "replace") {
           el.innerHTML = msg.html;
-          // Re-layout seats when player list is replaced
-          if (msg.target === "player-list") layoutSeats();
+          if (msg.target === "player-list") {
+            layoutSeats();
+            hideCenterBubble();
+          }
         } else if (msg.action === "show") {
           el.classList.remove('hidden');
           if (msg.html) el.innerHTML = msg.html;
           if (msg.target === "game-area") layoutSeats();
         } else if (msg.action === "hide") {
           el.classList.add('hidden');
-        } else if (msg.action === "bubble") {
-          // Show speech bubble for a player, hide all others first
-          clearBubbles();
-          var textEl = el.querySelector('.bubble-text');
-          if (textEl) textEl.textContent = msg.html;
-          el.classList.add('visible');
-          el.classList.remove('hidden');
-        } else if (msg.action === "stream-bubble") {
-          // Stream tokens into a speech bubble
-          var textEl = el.querySelector('.bubble-text');
-          if (textEl) textEl.textContent += msg.html;
-          el.classList.add('visible');
-          el.classList.remove('hidden');
+        } else if (msg.action === "speak") {
+          // Show message in center bubble, highlight speaker, trigger TTS.
+          // msg.target = "center-bubble", msg.html = "playerID|speakerName|text"
+          var parts = msg.html.split('|');
+          var pid = parts[0];
+          var name = parts[1];
+          var text = parts.slice(2).join('|'); // rejoin in case text has pipes
+          highlightSpeaker(pid);
+          showCenterBubble(name, text);
+          speakMessage(parseInt(pid, 10), text);
+        } else if (msg.action === "speak-start") {
+          // Start streaming into center bubble. msg.html = "playerID|speakerName"
+          var parts = msg.html.split('|');
+          var pid = parts[0];
+          var name = parts.slice(1).join('|');
+          highlightSpeaker(pid);
+          showCenterBubble(name, '');
+        } else if (msg.action === "speak-stream") {
+          // Append token to center bubble text (el = center-text)
+          el.textContent += msg.html;
+        } else if (msg.action === "speak-end") {
+          // Streaming done. msg.html = "playerID|full text" — trigger TTS
+          var parts = msg.html.split('|');
+          var pid = parseInt(parts[0], 10);
+          var text = parts.slice(1).join('|');
+          speakMessage(pid, text);
         }
       };
 
@@ -565,7 +656,7 @@ func (s *server) handleMessage(w http.ResponseWriter, r *http.Request) {
 
 	if s.hub.connected() {
 		s.broadcastEvent(r.Context(), eventText)
-		s.broadcastBubble(human.ID, msg)
+		s.broadcastBubble(human.ID, human.Name, msg)
 		s.mu.Unlock()
 		s.driveGameAsync()
 		w.WriteHeader(http.StatusOK)
@@ -862,11 +953,30 @@ func (s *server) broadcastThinking(name string) {
 	s.hub.send(ctx, wsMessage{Target: "action-panel", Action: "replace", HTML: html})
 }
 
-// broadcastBubble sends a speech bubble update for a specific player.
-func (s *server) broadcastBubble(playerID PlayerID, text string) {
+// broadcastBubble shows a player's message in the center bubble, highlights
+// their seat, and triggers TTS on the client.
+func (s *server) broadcastBubble(playerID PlayerID, playerName, text string) {
 	ctx := context.Background()
-	target := fmt.Sprintf("bubble-%d", playerID)
-	s.hub.send(ctx, wsMessage{Target: target, Action: "bubble", HTML: template.HTMLEscapeString(text)})
+	payload := fmt.Sprintf("%d|%s|%s",
+		playerID,
+		template.HTMLEscapeString(playerName),
+		template.HTMLEscapeString(text),
+	)
+	s.hub.send(ctx, wsMessage{Target: "center-bubble", Action: "speak", HTML: payload})
+}
+
+// broadcastSpeakStart prepares the center bubble for streaming (shows speaker name, clears text).
+func (s *server) broadcastSpeakStart(playerID PlayerID, playerName string) {
+	ctx := context.Background()
+	payload := fmt.Sprintf("%d|%s", playerID, template.HTMLEscapeString(playerName))
+	s.hub.send(ctx, wsMessage{Target: "center-bubble", Action: "speak-start", HTML: payload})
+}
+
+// broadcastSpeakEnd signals that streaming is done and triggers TTS with the full message.
+func (s *server) broadcastSpeakEnd(playerID PlayerID, text string) {
+	ctx := context.Background()
+	payload := fmt.Sprintf("%d|%s", playerID, template.HTMLEscapeString(text))
+	s.hub.send(ctx, wsMessage{Target: "center-bubble", Action: "speak-end", HTML: payload})
 }
 
 // --- Game driver ---
@@ -1212,7 +1322,7 @@ func (s *server) stepDayLocked() {
 			return
 		}
 		s.eventLog = append(s.eventLog, fmt.Sprintf("[%s] %s", speaker.Name, msg))
-		s.broadcastBubble(speaker.ID, msg)
+		s.broadcastBubble(speaker.ID, speaker.Name, msg)
 		disc.Index++
 	}
 
@@ -1225,7 +1335,7 @@ func (s *server) stepDayLocked() {
 func (s *server) stepDayStreamLocked(sa StreamingAgent, speaker *Player, disc *DiscussionState) {
 	ctx := context.Background()
 
-	// Send placeholder for streaming message
+	// Send placeholder for streaming message in event log
 	streamID := fmt.Sprintf("stream-%d-%d", speaker.ID, s.game.DayNumber)
 	placeholder := fmt.Sprintf(
 		`<li id="%s"><strong>[%s]</strong> <span id="%s-text"></span></li>`,
@@ -1233,9 +1343,8 @@ func (s *server) stepDayStreamLocked(sa StreamingAgent, speaker *Player, disc *D
 	)
 	s.hub.send(ctx, wsMessage{Target: "event-log", Action: "append", HTML: placeholder})
 
-	// Prepare speech bubble for streaming: show it empty first
-	bubbleTarget := fmt.Sprintf("bubble-%d", speaker.ID)
-	s.hub.send(ctx, wsMessage{Target: bubbleTarget, Action: "bubble", HTML: ""})
+	// Prepare center bubble for streaming: highlight speaker, show empty bubble
+	s.broadcastSpeakStart(speaker.ID, speaker.Name)
 
 	// Broadcast "thinking" indicator
 	s.broadcastThinking(speaker.Name)
@@ -1249,7 +1358,7 @@ func (s *server) stepDayStreamLocked(sa StreamingAgent, speaker *Player, disc *D
 
 	s.mu.Unlock()
 
-	// Stream tokens — onToken sends each chunk over WS (event log + bubble)
+	// Stream tokens — onToken sends each chunk over WS (event log + center bubble)
 	textTarget := streamID + "-text"
 	msg, err := sa.DiscussStream(gameCopy, playerCopy, dayNumber, func(token string) {
 		escaped := template.HTMLEscapeString(token)
@@ -1258,10 +1367,10 @@ func (s *server) stepDayStreamLocked(sa StreamingAgent, speaker *Player, disc *D
 			Action: "stream",
 			HTML:   escaped,
 		})
-		// Also stream to the speech bubble
+		// Also stream to the center bubble
 		s.hub.send(ctx, wsMessage{
-			Target: bubbleTarget,
-			Action: "stream-bubble",
+			Target: "center-text",
+			Action: "speak-stream",
 			HTML:   escaped,
 		})
 	})
@@ -1276,7 +1385,8 @@ func (s *server) stepDayStreamLocked(sa StreamingAgent, speaker *Player, disc *D
 
 	s.eventLog = append(s.eventLog, fmt.Sprintf("[%s] %s", speaker.Name, msg))
 	s.streamedUpTo = len(s.eventLog) // mark as already broadcast via streaming
-	s.broadcastBubble(speaker.ID, msg)
+	// Send speak-end to trigger TTS with the full message
+	s.broadcastSpeakEnd(speaker.ID, msg)
 	disc.Index++
 
 	s.finishDiscussionLocked()
