@@ -341,9 +341,15 @@ const indexTemplate = `<!doctype html>
     var availableVoices = [];
 
     function loadVoices() {
-      availableVoices = speechSynthesis.getVoices().filter(function(v) {
+      var preferredVoices = ['Samantha', 'Daniel', 'Karen', 'Moira', 'Tessa',
+        'Rishi', 'Catherine', 'Martha', 'Nicky', 'Aaron', 'Arthur', 'Gordon'];
+      var allEnglish = speechSynthesis.getVoices().filter(function(v) {
         return v.lang.startsWith('en');
       });
+      var preferred = allEnglish.filter(function(v) {
+        return preferredVoices.some(function(p) { return v.name.startsWith(p); });
+      });
+      availableVoices = preferred.length > 0 ? preferred : allEnglish;
     }
     if (typeof speechSynthesis !== 'undefined') {
       loadVoices();
@@ -357,6 +363,12 @@ const indexTemplate = `<!doctype html>
     }
 
     function speakMessage(playerID, text) {
+      // Skip TTS for the human player — their message is already visible.
+      var humanSeat = document.querySelector('.seat[data-human="true"]');
+      if (humanSeat && String(playerID) === humanSeat.getAttribute('data-player')) {
+        signalTTSDone();
+        return;
+      }
       if (!ttsEnabled || typeof speechSynthesis === 'undefined' || !text) {
         signalTTSDone();
         return;

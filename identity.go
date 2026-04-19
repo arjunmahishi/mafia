@@ -9,16 +9,16 @@ type AgentIdentity struct {
 // identityPool is the hardcoded pool of agent identities.
 // At game start, N-1 are randomly sampled without replacement.
 var identityPool = []AgentIdentity{
-	{Name: "Vera", Trait: "paranoid and accusatory"},
-	{Name: "Marcus", Trait: "calm and analytical"},
-	{Name: "Dahlia", Trait: "charming but evasive"},
-	{Name: "Soren", Trait: "blunt and confrontational"},
-	{Name: "Ivy", Trait: "quiet and observant"},
-	{Name: "Jasper", Trait: "nervously talkative"},
-	{Name: "Luna", Trait: "cryptic and philosophical"},
+	{Name: "Prism", Trait: "paranoid and accusatory"},
+	{Name: "Slate", Trait: "calm and analytical"},
+	{Name: "Mirage", Trait: "charming but evasive"},
+	{Name: "Flint", Trait: "blunt and confrontational"},
+	{Name: "Echo", Trait: "quiet and observant"},
+	{Name: "Glitch", Trait: "nervously talkative"},
+	{Name: "Cipher", Trait: "cryptic and philosophical"},
 	{Name: "Rook", Trait: "sardonic and skeptical"},
 	{Name: "Ember", Trait: "fiercely loyal to early allies"},
-	{Name: "Colt", Trait: "impulsive and emotional"},
+	{Name: "Spark", Trait: "impulsive and emotional"},
 	{Name: "Sage", Trait: "methodical and evidence-driven"},
 	{Name: "Nyx", Trait: "playful and unpredictable"},
 }
