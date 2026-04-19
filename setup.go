@@ -10,7 +10,7 @@ import (
 // Returning nil means the player gets no agent (only valid for humans).
 type NewAgentFunc func(role Role, identity AgentIdentity) Agent
 
-func NewGame(totalPlayers int, rng *rand.Rand, newAgent NewAgentFunc) (*Game, error) {
+func NewGame(totalPlayers int, humanName string, rng *rand.Rand, newAgent NewAgentFunc) (*Game, error) {
 	if err := ValidatePlayerCount(totalPlayers); err != nil {
 		return nil, err
 	}
@@ -29,10 +29,14 @@ func NewGame(totalPlayers int, rng *rand.Rand, newAgent NewAgentFunc) (*Game, er
 	// Pick identities for bot players (totalPlayers - 1 bots).
 	identities := pickIdentities(totalPlayers-1, rng.Shuffle)
 
+	if humanName == "" {
+		humanName = "You"
+	}
+
 	players := make([]Player, totalPlayers)
 	players[0] = Player{
 		ID:           PlayerID(1),
-		Name:         "You",
+		Name:         humanName,
 		IsHuman:      true,
 		Alive:        true,
 		RoleRevealed: false,

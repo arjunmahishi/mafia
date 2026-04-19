@@ -21,7 +21,7 @@ func newTestWSServer(t *testing.T, playerCount int, seed int64) (*httptest.Serve
 	s := newServer()
 	s.botDelay = 0 // no delays in tests
 
-	g, err := NewGame(playerCount, rand.New(rand.NewSource(seed)), nil)
+	g, err := NewGame(playerCount, "", rand.New(rand.NewSource(seed)), nil)
 	if err != nil {
 		t.Fatalf("NewGame error: %v", err)
 	}
@@ -207,7 +207,7 @@ func TestWSFullGamePlaythrough(t *testing.T) {
 	seed := findSeedForHumanRole(t, 5, RoleVillager)
 
 	// Override the server's game directly for deterministic testing
-	g, err := NewGame(5, rand.New(rand.NewSource(seed)), nil)
+	g, err := NewGame(5, "", rand.New(rand.NewSource(seed)), nil)
 	if err != nil {
 		t.Fatal(err)
 	}

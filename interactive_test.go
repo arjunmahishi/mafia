@@ -15,7 +15,7 @@ import (
 func newTestServerWithSeed(t *testing.T, playerCount int, seed int64) *server {
 	t.Helper()
 	s := newServer()
-	g, err := NewGame(playerCount, rand.New(rand.NewSource(seed)), nil)
+	g, err := NewGame(playerCount, "", rand.New(rand.NewSource(seed)), nil)
 	if err != nil {
 		t.Fatalf("NewGame error: %v", err)
 	}
@@ -32,7 +32,7 @@ func newTestServerWithSeed(t *testing.T, playerCount int, seed int64) *server {
 func findSeedForHumanRole(t *testing.T, playerCount int, role Role) int64 {
 	t.Helper()
 	for seed := int64(0); seed < 1000; seed++ {
-		g, err := NewGame(playerCount, rand.New(rand.NewSource(seed)), nil)
+		g, err := NewGame(playerCount, "", rand.New(rand.NewSource(seed)), nil)
 		if err != nil {
 			t.Fatalf("NewGame error: %v", err)
 		}

@@ -20,8 +20,8 @@ import (
 // WebSocket pushes, or composed together for the full page render.
 
 const tmplPhaseInfo = `{{define "phase-info"}}
-<div class="phase-bar">
-  <span class="phase-label">{{if eq (printf "%s" .Phase) "night"}}Night{{else if eq (printf "%s" .Phase) "day"}}Day{{else if eq (printf "%s" .Phase) "vote"}}Vote{{else}}{{.Phase}}{{end}}{{if gt .DayNumber 0}} {{.DayNumber}}{{end}}</span>
+<div class="flex items-center gap-3 px-4 py-3 bg-neutral-900 border border-neutral-800 rounded-lg mb-4">
+  <span class="font-display text-xl text-neutral-200 tracking-wide">{{if eq (printf "%s" .Phase) "night"}}Night{{else if eq (printf "%s" .Phase) "day"}}Day{{else if eq (printf "%s" .Phase) "vote"}}Vote{{else}}{{.Phase}}{{end}}{{if gt .DayNumber 0}} {{.DayNumber}}{{end}}</span>
   {{if .HumanRole}}
     <span class="role-badge role-{{.HumanRole}}">{{.HumanRole}}</span>
   {{end}}
@@ -30,72 +30,110 @@ const tmplPhaseInfo = `{{define "phase-info"}}
 
 const tmplActionPanel = `{{define "action-panel"}}
 {{if .Winner}}
-  <div class="game-over">
-    <p class="winner-text">{{if eq (printf "%s" .Winner) "mafia"}}The Mafia wins.{{else}}The Village wins.{{end}}</p>
+  <div class="text-center py-8">
+    <p class="font-display text-3xl text-neutral-200 mb-6">{{if eq (printf "%s" .Winner) "mafia"}}The Mafia wins.{{else}}The Village wins.{{end}}</p>
     <form method="post" action="/start">
       <input type="hidden" name="player_count" value="{{len .Players}}" />
-      <button type="submit" class="btn btn-blood">Play Again</button>
+      <input type="hidden" name="player_name" value="{{.HumanName}}" />
+      <button type="submit" class="px-8 py-3 bg-red-600 text-white font-display text-lg tracking-wider rounded hover:bg-red-700 hover:shadow-[0_0_24px_rgba(220,38,38,0.3)] transition-all cursor-pointer">Play Again</button>
     </form>
   </div>
 {{else if .Pending}}
-  <div class="action-panel">
-    <h3 class="action-title">Your Turn</h3>
-    <p class="action-prompt">{{.Pending.Prompt}}</p>
+  <div class="border border-red-600 rounded-lg p-5 bg-red-600/5">
+    <h3 class="font-display text-lg text-red-500 mb-1">Your Turn</h3>
+    <p class="text-sm text-neutral-400 mb-4">{{.Pending.Prompt}}</p>
 
     {{if eq .Pending.Type "message"}}
       <form method="post" action="/action/message">
-        <textarea name="message" placeholder="Type your message..." required></textarea>
-        <button type="submit" class="btn btn-blood">Send</button>
+        <textarea name="message" placeholder="Type your message..." required
+          class="w-full min-h-[60px] bg-[#0a0a0a] border border-neutral-800 rounded-md text-neutral-200 font-body text-sm px-3 py-2 resize-y outline-none focus:border-red-600 mb-3"></textarea>
+        <button type="submit" class="px-6 py-2 bg-red-600 text-white font-display tracking-wider rounded hover:bg-red-700 hover:shadow-[0_0_24px_rgba(220,38,38,0.3)] transition-all cursor-pointer">Send</button>
       </form>
     {{else if eq .Pending.Type "vote"}}
-      <form method="post" action="/action/vote">
-        <select name="target" required>
+      <form method="post" action="/action/vote" class="flex items-center gap-3">
+        <select name="target" required
+          class="bg-[#0a0a0a] border border-neutral-800 rounded-md text-neutral-200 text-sm px-3 py-2 min-w-[180px] outline-none focus:border-red-600 min-h-[44px]">
           <option value="">Choose who to eliminate</option>
           {{range .AllowedTargets}}
             <option value="{{.ID}}">{{.Name}}</option>
           {{end}}
         </select>
-        <button type="submit" class="btn btn-blood">Cast Vote</button>
+        <button type="submit" class="px-6 py-2 bg-red-600 text-white font-display tracking-wider rounded hover:bg-red-700 hover:shadow-[0_0_24px_rgba(220,38,38,0.3)] transition-all cursor-pointer">Cast Vote</button>
       </form>
     {{else}}
-      <form method="post" action="/action/night">
-        <select name="target" required>
+      <form method="post" action="/action/night" class="flex items-center gap-3">
+        <select name="target" required
+          class="bg-[#0a0a0a] border border-neutral-800 rounded-md text-neutral-200 text-sm px-3 py-2 min-w-[180px] outline-none focus:border-red-600 min-h-[44px]">
           <option value="">Choose target</option>
           {{range .AllowedTargets}}
             <option value="{{.ID}}">{{.Name}}</option>
           {{end}}
         </select>
-        <button type="submit" class="btn btn-blood">Confirm</button>
+        <button type="submit" class="px-6 py-2 bg-red-600 text-white font-display tracking-wider rounded hover:bg-red-700 hover:shadow-[0_0_24px_rgba(220,38,38,0.3)] transition-all cursor-pointer">Confirm</button>
       </form>
     {{end}}
   </div>
 {{else}}
-  <p class="waiting">Waiting...</p>
+  <p class="text-neutral-500 italic py-4 text-sm flex items-center gap-2"><span class="thinking-dot"></span>Waiting...</p>
 {{end}}
 {{end}}`
 
 const tmplPlayerList = `{{define "player-list"}}
-<ul class="player-list">
-  {{range .Players}}
-    <li class="player-entry{{if not .Alive}} dead{{end}}{{if .IsHuman}} you{{end}}">
-      <span class="player-name">{{if .IsHuman}}You{{else}}{{.Name}}{{end}}</span>
-      <span class="player-status">{{if .Alive}}alive{{else}}dead{{end}}</span>
-      {{if or .RoleRevealed $.RevealAllRoles}}<span class="role-badge role-{{.Role}}">{{.Role}}</span>{{end}}
-    </li>
-  {{end}}
-</ul>
+{{range $i, $p := .Players}}
+  <div class="seat absolute flex flex-col items-center" data-seat="{{$i}}" data-total="{{len $.Players}}" data-human="{{$p.IsHuman}}">
+    <div class="flex flex-col items-center gap-1">
+      {{if $p.IsHuman}}
+      <div class="w-12 h-12 rounded-full flex items-center justify-center border-2 {{if not $p.Alive}}opacity-30 border-neutral-700{{else}}border-white bg-white/5{{end}}">
+        <svg viewBox="0 0 48 48" class="w-8 h-8">
+          <circle cx="24" cy="12" r="6" fill="none" stroke="white" stroke-width="2"/>
+          <line x1="24" y1="18" x2="24" y2="34" stroke="white" stroke-width="2" stroke-linecap="round"/>
+          <line x1="14" y1="24" x2="34" y2="24" stroke="white" stroke-width="2" stroke-linecap="round"/>
+          <line x1="24" y1="34" x2="16" y2="44" stroke="white" stroke-width="2" stroke-linecap="round"/>
+          <line x1="24" y1="34" x2="32" y2="44" stroke="white" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+      </div>
+      {{else}}
+      <div class="w-12 h-12 rounded-lg flex items-center justify-center border-2 {{if not $p.Alive}}opacity-30 border-neutral-700{{else}}border-neutral-500 bg-neutral-800/50{{end}}">
+        <svg viewBox="0 0 56 56" class="w-8 h-8 text-neutral-400">
+          <line x1="20" y1="0" x2="14" y2="-10" stroke="currentColor" stroke-width="2" stroke-linecap="round" transform="translate(0,14)"/>
+          <line x1="36" y1="0" x2="42" y2="-10" stroke="currentColor" stroke-width="2" stroke-linecap="round" transform="translate(0,14)"/>
+          <rect x="6" y="6" width="44" height="44" rx="8" fill="none" stroke="currentColor" stroke-width="2"/>
+          <rect x="14" y="18" width="10" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/>
+          <rect x="32" y="18" width="10" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/>
+          <polygon points="28,36 32,42 28,48 24,42" fill="none" stroke="currentColor" stroke-width="1.5"/>
+        </svg>
+      </div>
+      {{end}}
+      <span class="text-xs font-medium max-w-[80px] truncate text-center {{if not $p.Alive}}line-through text-neutral-600{{else if $p.IsHuman}}text-white{{else}}text-neutral-300{{end}}">{{$p.Name}}</span>
+      {{if not $p.Alive}}<span class="text-[10px] text-neutral-600">dead</span>{{end}}
+      {{if or $p.RoleRevealed $.RevealAllRoles}}<span class="role-badge role-{{$p.Role}}">{{$p.Role}}</span>{{end}}
+    </div>
+    <div id="bubble-{{$p.ID}}" class="speech-bubble hidden mt-2 max-w-[160px] text-xs text-neutral-300 bg-neutral-800/90 border border-neutral-700 rounded-lg px-3 py-2 text-center relative">
+      <div class="absolute -top-1.5 left-1/2 -translate-x-1/2 w-3 h-3 bg-neutral-800/90 border-l border-t border-neutral-700 rotate-45"></div>
+      <span class="bubble-text relative z-10"></span>
+    </div>
+  </div>
+{{end}}
 {{end}}`
 
 const tmplEventItem = `{{define "event-item"}}<li>{{.}}</li>{{end}}`
 
 const tmplLobby = `{{define "lobby"}}
-<div class="lobby-inner">
-  <h1 class="lobby-title"><span class="text-blood">Mafia</span></h1>
-  <p class="lobby-subtitle">Social deception with AI agents</p>
-  <form method="post" action="/start" class="lobby-form">
-    <label for="player_count">Players</label>
-    <input id="player_count" name="player_count" type="number" min="5" max="10" value="8" />
-    <button type="submit" class="btn btn-blood">Start Game</button>
+<div class="flex flex-col items-center text-center">
+  <h1 class="font-display text-6xl text-white tracking-wide mb-1"><span class="text-red-600">Mafia</span></h1>
+  <p class="text-neutral-500 text-lg mb-10">Social deception with AI agents</p>
+  <form method="post" action="/start" class="flex flex-col items-center gap-4">
+    <div class="flex flex-col items-center gap-1">
+      <label for="player_name" class="text-neutral-400 text-xs uppercase tracking-widest">Your Name</label>
+      <input id="player_name" name="player_name" type="text" placeholder="Enter your name" required
+        class="bg-neutral-900 border border-neutral-800 rounded-md text-neutral-200 text-base text-center px-4 py-2 w-56 outline-none focus:border-red-600 placeholder:text-neutral-600" />
+    </div>
+    <div class="flex flex-col items-center gap-1">
+      <label for="player_count" class="text-neutral-400 text-xs uppercase tracking-widest">Players</label>
+      <input id="player_count" name="player_count" type="number" min="5" max="10" value="8"
+        class="bg-neutral-900 border border-neutral-800 rounded-md text-neutral-200 text-xl text-center px-4 py-2 w-20 outline-none focus:border-red-600" />
+    </div>
+    <button type="submit" class="mt-2 px-8 py-3 bg-red-600 text-white font-display text-lg tracking-wider rounded hover:bg-red-700 hover:shadow-[0_0_24px_rgba(220,38,38,0.3)] transition-all cursor-pointer">Start Game</button>
   </form>
 </div>
 {{end}}`
@@ -106,34 +144,27 @@ const indexTemplate = `<!doctype html>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Mafia — Social Deception with AI</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            display: ['"Special Elite"', 'cursive'],
+            body: ['Inter', 'sans-serif'],
+          },
+        },
+      },
+    }
+  </script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Special+Elite&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
   <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-    :root {
-      --blood: #dc2626;
-      --blood-dim: #b91c1c;
-      --bg: #0a0a0a;
-      --card: #111111;
-      --border: #1e1e1e;
-      --text: #a3a3a3;
-      --text-bright: #e5e5e5;
-      --text-dim: #525252;
-      --font-display: 'Special Elite', cursive;
-      --font-body: 'Inter', sans-serif;
-    }
-
     body {
-      font-family: var(--font-body);
-      font-weight: 300;
-      background: var(--bg);
-      color: var(--text);
-      min-height: 100vh;
+      font-family: 'Inter', sans-serif;
       -webkit-font-smoothing: antialiased;
     }
-
     body::before {
       content: '';
       position: fixed;
@@ -143,111 +174,12 @@ const indexTemplate = `<!doctype html>
       z-index: 0;
     }
 
-    /* -- Lobby -- */
-    #lobby {
-      position: relative;
-      z-index: 1;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      min-height: 100vh;
-    }
-    .lobby-inner { text-align: center; }
-    .lobby-title {
-      font-family: var(--font-display);
-      font-size: 4rem;
-      color: white;
-      letter-spacing: 0.05em;
-      margin-bottom: 0.25rem;
-    }
-    .text-blood { color: var(--blood); }
-    .lobby-subtitle {
-      color: var(--text-dim);
-      font-size: 1.1rem;
-      margin-bottom: 2.5rem;
-    }
-    .lobby-form {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 1rem;
-    }
-    .lobby-form label {
-      color: var(--text);
-      font-size: 0.85rem;
-      text-transform: uppercase;
-      letter-spacing: 0.1em;
-    }
-    .lobby-form input[type=number] {
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      color: var(--text-bright);
-      font-size: 1.25rem;
-      text-align: center;
-      padding: 0.6rem 1rem;
-      width: 80px;
-      outline: none;
-    }
-    .lobby-form input[type=number]:focus {
-      border-color: var(--blood);
-    }
-
-    /* -- Buttons -- */
-    .btn {
-      display: inline-block;
-      padding: 0.65rem 1.6rem;
-      font-family: var(--font-display);
-      font-size: 1rem;
-      letter-spacing: 0.08em;
-      border: none;
-      border-radius: 5px;
-      cursor: pointer;
-      transition: background 0.15s, box-shadow 0.15s;
-      min-height: 44px;
-    }
-    .btn-blood {
-      background: var(--blood);
-      color: white;
-    }
-    .btn-blood:hover {
-      background: var(--blood-dim);
-      box-shadow: 0 0 24px rgba(220,38,38,0.3);
-    }
-
-    /* -- Game Area -- */
-    #game-area {
-      position: relative;
-      z-index: 1;
-      max-width: 900px;
-      margin: 0 auto;
-      padding: 1.5rem 1rem 3rem;
-    }
-
-    /* -- Phase Bar -- */
-    .phase-bar {
-      display: flex;
-      align-items: center;
-      gap: 0.75rem;
-      padding: 0.75rem 1rem;
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      margin-bottom: 1rem;
-    }
-    .phase-label {
-      font-family: var(--font-display);
-      font-size: 1.4rem;
-      color: var(--text-bright);
-      letter-spacing: 0.05em;
-    }
-
-    /* -- Role Badges -- */
+    /* Role badges */
     .role-badge {
       display: inline-block;
-      padding: 0.15rem 0.55rem;
+      padding: 0.1rem 0.45rem;
       border-radius: 4px;
-      font-size: 0.75rem;
+      font-size: 0.65rem;
       font-weight: 500;
       letter-spacing: 0.04em;
       text-transform: uppercase;
@@ -257,193 +189,76 @@ const indexTemplate = `<!doctype html>
     .role-detective { background: rgba(59,130,246,0.12); color: #93c5fd; border: 1px solid rgba(59,130,246,0.25); }
     .role-villager { background: rgba(163,163,163,0.1); color: #a3a3a3; border: 1px solid rgba(163,163,163,0.2); }
 
-    /* -- Action Panel -- */
-    #action-panel { margin-bottom: 1rem; }
-    .action-panel {
-      border: 1px solid var(--blood);
-      border-radius: 8px;
-      padding: 1.25rem;
-      background: rgba(220,38,38,0.04);
+    /* Speech bubble transition */
+    .speech-bubble {
+      transition: opacity 0.3s ease, transform 0.3s ease;
+      opacity: 0;
+      transform: translateY(-4px);
     }
-    .action-title {
-      font-family: var(--font-display);
-      font-size: 1.1rem;
-      color: var(--blood);
-      margin-bottom: 0.4rem;
+    .speech-bubble.visible {
+      display: block !important;
+      opacity: 1;
+      transform: translateY(0);
     }
-    .action-prompt {
-      color: var(--text);
-      font-size: 0.9rem;
-      margin-bottom: 1rem;
-    }
-    .action-panel textarea {
-      width: 100%;
-      min-height: 60px;
-      background: var(--bg);
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      color: var(--text-bright);
-      font-family: var(--font-body);
-      font-size: 0.9rem;
-      padding: 0.6rem 0.75rem;
-      resize: vertical;
-      outline: none;
-      margin-bottom: 0.75rem;
-    }
-    .action-panel textarea:focus { border-color: var(--blood); }
-    .action-panel select {
-      background: var(--bg);
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      color: var(--text-bright);
-      font-size: 0.9rem;
-      padding: 0.5rem 0.75rem;
-      min-width: 180px;
-      outline: none;
-      margin-right: 0.5rem;
-      min-height: 44px;
-    }
-    .action-panel select:focus { border-color: var(--blood); }
 
-    /* -- Waiting / Thinking -- */
-    .waiting {
-      color: var(--text-dim);
-      font-style: italic;
-      padding: 1rem;
-      font-size: 0.9rem;
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
+    /* Thinking dot animation */
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 0.3; transform: scale(0.8); }
+      50% { opacity: 1; transform: scale(1.2); }
     }
     .thinking-dot {
       display: inline-block;
       width: 8px;
       height: 8px;
       border-radius: 50%;
-      background: var(--blood);
+      background: #dc2626;
       animation: pulse-dot 1.2s ease-in-out infinite;
     }
-    @keyframes pulse-dot {
-      0%, 100% { opacity: 0.3; transform: scale(0.8); }
-      50% { opacity: 1; transform: scale(1.2); }
-    }
-
-    /* -- Game Over -- */
-    .game-over {
-      text-align: center;
-      padding: 2rem 1rem;
-    }
-    .winner-text {
-      font-family: var(--font-display);
-      font-size: 1.8rem;
-      color: var(--text-bright);
-      margin-bottom: 1.5rem;
-    }
-
-    /* -- Layout: Players + Event Log -- */
-    .game-row {
-      display: flex;
-      gap: 1rem;
-      align-items: flex-start;
-    }
-    .game-panel {
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 1rem;
-    }
-    .game-panel h2 {
-      font-family: var(--font-display);
-      font-size: 1rem;
-      color: var(--text-dim);
-      text-transform: uppercase;
-      letter-spacing: 0.1em;
-      margin-bottom: 0.75rem;
-    }
-    .panel-players { flex: 0 0 220px; }
-    .panel-events { flex: 1; min-width: 0; }
-
-    /* -- Player List -- */
-    .player-list { list-style: none; }
-    .player-entry {
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      padding: 0.4rem 0;
-      font-size: 0.9rem;
-      border-bottom: 1px solid var(--border);
-    }
-    .player-entry:last-child { border-bottom: none; }
-    .player-name { color: var(--text-bright); }
-    .player-status { color: var(--text-dim); font-size: 0.75rem; }
-    .player-entry.dead .player-name { color: var(--text-dim); text-decoration: line-through; }
-    .player-entry.dead .player-status { color: var(--text-dim); }
-    .player-entry.you .player-name { color: white; font-weight: 500; }
-
-    /* -- Event Log -- */
-    #event-log {
-      list-style: none;
-      max-height: 450px;
-      overflow-y: auto;
-      scroll-behavior: smooth;
-    }
-    #event-log li {
-      padding: 0.4rem 0;
-      font-size: 0.88rem;
-      line-height: 1.45;
-      border-bottom: 1px solid rgba(30,30,30,0.5);
-      color: var(--text);
-    }
-    #event-log li:last-child { border-bottom: none; }
 
     /* Scrollbar styling */
     #event-log::-webkit-scrollbar { width: 4px; }
     #event-log::-webkit-scrollbar-track { background: transparent; }
-    #event-log::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+    #event-log::-webkit-scrollbar-thumb { background: #1e1e1e; border-radius: 2px; }
 
-    /* -- Responsive -- */
-    @media (max-width: 640px) {
-      #game-area { padding: 1rem 0.75rem 2rem; }
-      .game-row { flex-direction: column; }
-      .panel-players { flex: none; width: 100%; }
-      .panel-events { flex: none; width: 100%; }
-      .lobby-title { font-size: 3rem; }
-      .phase-label { font-size: 1.1rem; }
-      #event-log { max-height: 350px; }
+    /* Table surface */
+    .table-surface {
+      background: radial-gradient(ellipse at center, rgba(30,30,30,0.6) 0%, rgba(10,10,10,0.9) 70%);
+      border: 2px solid #1e1e1e;
     }
   </style>
 </head>
-<body>
+<body class="bg-[#0a0a0a] text-neutral-400 font-body font-light min-h-screen">
 
-  <div id="lobby">
+  <div id="lobby" class="relative z-10 flex items-center justify-center min-h-screen {{if .HasGame}}hidden{{end}}">
   {{if not .HasGame}}
     {{template "lobby" .}}
   {{end}}
   </div>
 
-  <div id="game-area" {{if not .HasGame}}style="display:none"{{end}}>
+  <div id="game-area" class="relative z-10 max-w-4xl mx-auto px-4 py-6 {{if not .HasGame}}hidden{{end}}">
     <div id="phase-info">{{if .HasGame}}{{template "phase-info" .}}{{end}}</div>
 
-    <div id="action-panel">
+    <!-- Round table -->
+    <div id="round-table" class="relative w-full mx-auto my-6" style="aspect-ratio: 1 / 1; max-width: 600px;">
+      <!-- Oval table surface -->
+      <div class="table-surface absolute rounded-full" style="top: 15%; left: 15%; width: 70%; height: 70%;"></div>
+      <!-- Player seats positioned around the circle -->
+      <div id="player-list">
+        {{if .HasGame}}{{template "player-list" .}}{{end}}
+      </div>
+    </div>
+
+    <div id="action-panel" class="mb-4">
       {{if .HasGame}}{{template "action-panel" .}}{{end}}
     </div>
 
-    <div class="game-row">
-      <div class="game-panel panel-players">
-        <h2>Players</h2>
-        <div id="player-list">
-          {{if .HasGame}}{{template "player-list" .}}{{end}}
-        </div>
-      </div>
-
-      <div class="game-panel panel-events">
-        <h2>Event Log</h2>
-        <ul id="event-log">
-          {{range .EventLog}}
-            <li>{{.}}</li>
-          {{end}}
-        </ul>
-      </div>
+    <div class="bg-neutral-900 border border-neutral-800 rounded-lg p-4">
+      <h2 class="font-display text-sm text-neutral-500 uppercase tracking-widest mb-3">Event Log</h2>
+      <ul id="event-log" class="list-none max-h-[300px] overflow-y-auto scroll-smooth space-y-0">
+        {{range .EventLog}}
+          <li class="py-1.5 text-sm leading-relaxed text-neutral-400 border-b border-neutral-800/50 last:border-b-0">{{.}}</li>
+        {{end}}
+      </ul>
     </div>
   </div>
 
@@ -451,6 +266,35 @@ const indexTemplate = `<!doctype html>
   (function() {
     var ws;
     var reconnectTimer;
+
+    // Position seats around an ellipse. Human (data-human=true) always at bottom.
+    function layoutSeats() {
+      var seats = document.querySelectorAll('.seat');
+      if (!seats.length) return;
+      var total = seats.length;
+      // Human is always index 0, placed at bottom (angle = PI/2 from positive-x = bottom of circle).
+      // Other players fill the remaining positions going clockwise from bottom-right.
+      seats.forEach(function(seat, i) {
+        // Angle: start from bottom (PI/2), go clockwise (subtract because CSS y-axis is inverted).
+        // Distribute evenly around the full circle.
+        var angle = (Math.PI / 2) + (2 * Math.PI * i / total);
+        var radiusX = 46; // % of container
+        var radiusY = 46;
+        var cx = 50 + radiusX * Math.cos(angle);
+        var cy = 50 + radiusY * Math.sin(angle);
+        seat.style.left = cx + '%';
+        seat.style.top = cy + '%';
+        seat.style.transform = 'translate(-50%, -50%)';
+      });
+    }
+
+    // Hide all speech bubbles
+    function clearBubbles() {
+      document.querySelectorAll('.speech-bubble').forEach(function(b) {
+        b.classList.remove('visible');
+        b.classList.add('hidden');
+      });
+    }
 
     function connect() {
       var proto = location.protocol === "https:" ? "wss:" : "ws:";
@@ -470,11 +314,27 @@ const indexTemplate = `<!doctype html>
           if (log) log.scrollTop = log.scrollHeight;
         } else if (msg.action === "replace") {
           el.innerHTML = msg.html;
+          // Re-layout seats when player list is replaced
+          if (msg.target === "player-list") layoutSeats();
         } else if (msg.action === "show") {
-          el.style.display = "";
+          el.classList.remove('hidden');
           if (msg.html) el.innerHTML = msg.html;
+          if (msg.target === "game-area") layoutSeats();
         } else if (msg.action === "hide") {
-          el.style.display = "none";
+          el.classList.add('hidden');
+        } else if (msg.action === "bubble") {
+          // Show speech bubble for a player, hide all others first
+          clearBubbles();
+          var textEl = el.querySelector('.bubble-text');
+          if (textEl) textEl.textContent = msg.html;
+          el.classList.add('visible');
+          el.classList.remove('hidden');
+        } else if (msg.action === "stream-bubble") {
+          // Stream tokens into a speech bubble
+          var textEl = el.querySelector('.bubble-text');
+          if (textEl) textEl.textContent += msg.html;
+          el.classList.add('visible');
+          el.classList.remove('hidden');
         }
       };
 
@@ -490,6 +350,10 @@ const indexTemplate = `<!doctype html>
     }
 
     connect();
+
+    // Initial layout (script is at bottom of body, DOM is already parsed)
+    layoutSeats();
+    window.addEventListener("resize", layoutSeats);
 
     // Intercept form submissions and send via fetch when WS is active.
     document.addEventListener("submit", function(e) {
@@ -537,6 +401,7 @@ type indexData struct {
 	EventLog       []string
 	RevealAllRoles bool
 	HumanRole      Role
+	HumanName      string
 	Pending        *PendingAction
 	AllowedTargets []Player // player objects for the allowed target IDs
 }
@@ -602,6 +467,7 @@ func (s *server) buildIndexDataLocked() indexData {
 	human := s.game.HumanPlayer()
 	if human != nil {
 		data.HumanRole = human.Role
+		data.HumanName = human.Name
 	}
 
 	// Build allowed targets as player objects for the template
@@ -633,7 +499,9 @@ func (s *server) handleStart(w http.ResponseWriter, r *http.Request) {
 		playerCount = parsed
 	}
 
-	g, err := NewGame(playerCount, rand.New(rand.NewSource(rand.Int63())), s.newAgent)
+	humanName := strings.TrimSpace(r.FormValue("player_name"))
+
+	g, err := NewGame(playerCount, humanName, rand.New(rand.NewSource(rand.Int63())), s.newAgent)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -652,7 +520,7 @@ func (s *server) handleStart(w http.ResponseWriter, r *http.Request) {
 	}
 	s.game = g
 	s.eventLog = []string{"Game started!"}
-	s.eventLog = append(s.eventLog, fmt.Sprintf("You are the %s.", g.HumanPlayer().Role))
+	s.eventLog = append(s.eventLog, fmt.Sprintf("%s, you are the %s.", g.HumanPlayer().Name, g.HumanPlayer().Role))
 	s.streamedUpTo = 0
 	s.game.EventLog = &s.eventLog
 
@@ -697,6 +565,7 @@ func (s *server) handleMessage(w http.ResponseWriter, r *http.Request) {
 
 	if s.hub.connected() {
 		s.broadcastEvent(r.Context(), eventText)
+		s.broadcastBubble(human.ID, msg)
 		s.mu.Unlock()
 		s.driveGameAsync()
 		w.WriteHeader(http.StatusOK)
@@ -936,7 +805,7 @@ func (s *server) sendFullStateLocked(ctx context.Context) {
 		s.hub.send(ctx, wsMessage{Target: "action-panel", Action: "replace", HTML: html})
 	}
 
-	// Show game area, hide lobby
+	// Show game area, hide lobby — add/remove 'hidden' class
 	s.hub.send(ctx, wsMessage{Target: "lobby", Action: "hide"})
 	s.hub.send(ctx, wsMessage{Target: "game-area", Action: "show", HTML: ""})
 }
@@ -987,10 +856,17 @@ func (s *server) broadcastPhaseLocked(ctx context.Context) {
 func (s *server) broadcastThinking(name string) {
 	ctx := context.Background()
 	html := fmt.Sprintf(
-		`<p class="waiting"><span class="thinking-dot"></span>%s is thinking...</p>`,
+		`<p class="text-neutral-500 italic py-4 text-sm flex items-center gap-2"><span class="thinking-dot"></span>%s is thinking...</p>`,
 		template.HTMLEscapeString(name),
 	)
 	s.hub.send(ctx, wsMessage{Target: "action-panel", Action: "replace", HTML: html})
+}
+
+// broadcastBubble sends a speech bubble update for a specific player.
+func (s *server) broadcastBubble(playerID PlayerID, text string) {
+	ctx := context.Background()
+	target := fmt.Sprintf("bubble-%d", playerID)
+	s.hub.send(ctx, wsMessage{Target: target, Action: "bubble", HTML: template.HTMLEscapeString(text)})
 }
 
 // --- Game driver ---
@@ -1336,6 +1212,7 @@ func (s *server) stepDayLocked() {
 			return
 		}
 		s.eventLog = append(s.eventLog, fmt.Sprintf("[%s] %s", speaker.Name, msg))
+		s.broadcastBubble(speaker.ID, msg)
 		disc.Index++
 	}
 
@@ -1356,6 +1233,10 @@ func (s *server) stepDayStreamLocked(sa StreamingAgent, speaker *Player, disc *D
 	)
 	s.hub.send(ctx, wsMessage{Target: "event-log", Action: "append", HTML: placeholder})
 
+	// Prepare speech bubble for streaming: show it empty first
+	bubbleTarget := fmt.Sprintf("bubble-%d", speaker.ID)
+	s.hub.send(ctx, wsMessage{Target: bubbleTarget, Action: "bubble", HTML: ""})
+
 	// Broadcast "thinking" indicator
 	s.broadcastThinking(speaker.Name)
 
@@ -1368,13 +1249,20 @@ func (s *server) stepDayStreamLocked(sa StreamingAgent, speaker *Player, disc *D
 
 	s.mu.Unlock()
 
-	// Stream tokens — onToken sends each chunk over WS
+	// Stream tokens — onToken sends each chunk over WS (event log + bubble)
 	textTarget := streamID + "-text"
 	msg, err := sa.DiscussStream(gameCopy, playerCopy, dayNumber, func(token string) {
+		escaped := template.HTMLEscapeString(token)
 		s.hub.send(ctx, wsMessage{
 			Target: textTarget,
 			Action: "stream",
-			HTML:   template.HTMLEscapeString(token),
+			HTML:   escaped,
+		})
+		// Also stream to the speech bubble
+		s.hub.send(ctx, wsMessage{
+			Target: bubbleTarget,
+			Action: "stream-bubble",
+			HTML:   escaped,
 		})
 	})
 
@@ -1388,6 +1276,7 @@ func (s *server) stepDayStreamLocked(sa StreamingAgent, speaker *Player, disc *D
 
 	s.eventLog = append(s.eventLog, fmt.Sprintf("[%s] %s", speaker.Name, msg))
 	s.streamedUpTo = len(s.eventLog) // mark as already broadcast via streaming
+	s.broadcastBubble(speaker.ID, msg)
 	disc.Index++
 
 	s.finishDiscussionLocked()

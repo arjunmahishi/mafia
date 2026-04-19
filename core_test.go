@@ -497,7 +497,7 @@ func (noOpResolver) ResolveVote(*Game) (*PlayerID, error) { return nil, nil }
 func newTestGame(t *testing.T, totalPlayers int) *Game {
 	t.Helper()
 
-	g, err := NewGame(totalPlayers, rand.New(rand.NewSource(1)), nil)
+	g, err := NewGame(totalPlayers, "", rand.New(rand.NewSource(1)), nil)
 	if err != nil {
 		t.Fatalf("NewGame(%d) error: %v", totalPlayers, err)
 	}

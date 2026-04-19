@@ -213,7 +213,7 @@ func TestMakeAgentFactoryNilClient(t *testing.T) {
 }
 
 func TestNewGameAssignsAgentNames(t *testing.T) {
-	g, err := NewGame(6, rand.New(rand.NewSource(42)), nil)
+	g, err := NewGame(6, "", rand.New(rand.NewSource(42)), nil)
 	if err != nil {
 		t.Fatalf("NewGame error: %v", err)
 	}
@@ -236,7 +236,7 @@ func TestNewGameAssignsAgentNames(t *testing.T) {
 }
 
 func TestNewGameWithNilAgentFactoryDefaultsToDeterministic(t *testing.T) {
-	g, err := NewGame(5, rand.New(rand.NewSource(1)), nil)
+	g, err := NewGame(5, "", rand.New(rand.NewSource(1)), nil)
 	if err != nil {
 		t.Fatalf("NewGame error: %v", err)
 	}
